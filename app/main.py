@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import firebase_auth, blood_sugar, user_profile
+from app.routes import firebase_auth, blood_sugar, user_profile, meals
 
 app = FastAPI(title="Doctor API (Firebase)", version="1.0.0")
 
@@ -17,6 +17,7 @@ app.add_middleware(
 app.include_router(firebase_auth.router, prefix="/auth", tags=["인증"])
 app.include_router(blood_sugar.router, prefix="/blood-sugar", tags=["혈당"])
 app.include_router(user_profile.router, prefix="/user", tags=["마이페이지"])
+app.include_router(meals.router, prefix="/meals", tags=["식단"])
 
 @app.get("/")
 async def root():
