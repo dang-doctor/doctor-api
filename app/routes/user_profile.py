@@ -63,6 +63,19 @@ async def get_current_user_id(authorization: str = Header(None)):
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"토큰 검증 실패: {str(e)}")
 
+async def get_user_by_kakao_id(kakao_id: str):
+    """kakao_id로 사용자 정보 조회"""
+    try:
+        db = get_firestore_db()
+        user_doc = db.collection('users').document(kakao_id).get()
+        
+        if not user_doc.exists:
+            return None
+        
+        return user_doc.to_dict()
+    except Exception:
+        return None
+
 @router.get("/profile", response_model=UserProfile)
 async def get_user_profile(user_id: str = Depends(get_current_user_id)):
     """사용자 프로필 조회"""
@@ -406,4 +419,113 @@ async def get_blood_sugar_statistics(user_id: str = Depends(get_current_user_id)
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"혈당 통계 조회 실패: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"혈당 통계 조회 실패: {str(e)}")
+
+# kakao_id로 직접 접근하는 엔드포인트들
+@router.get("/kakao/{kakao_id}/profile", response_model=UserProfile)
+async def get_user_profile_by_kakao_id(kakao_id: str):
+    """kakao_id로 사용자 상세 프로필 조회"""
+    try:
+        # kakao_id로 사용자 정보 조회
+        user_data = await get_user_by_kakao_id(kakao_id)
+        if not user_data:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        return UserProfile(
+            user_id=kakao_id,
+            email=user_data.get('email'),
+            nickname=user_data.get('nickname'),
+            profile_image=user_data.get('profile_image'),
+            gender=user_data.get('gender'),
+            height=user_data.get('height'),
+            weight=user_data.get('weight'),
+            activity_level=user_data.get('activity_level'),
+            carb_ratio=user_data.get('carb_ratio'),
+            protein_ratio=user_data.get('protein_ratio'),
+            fat_ratio=user_data.get('fat_ratio'),
+            created_at=user_data.get('created_at', '').isoformat() if hasattr(user_data.get('created_at'), 'isoformat') else str(user_data.get('created_at', '')),
+            updated_at=user_data.get('updated_at', '').isoformat() if hasattr(user_data.get('updated_at'), 'isoformat') else str(user_data.get('updated_at', ''))
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"사용자 프로필 조회 실패: {str(e)}")
+
+@router.put("/kakao/{kakao_id}/profile", response_model=UserProfile)
+async def update_user_profile_by_kakao_id(
+    kakao_id: str, 
+    profile_data: UserProfileUpdate
+):
+    """kakao_id로 사용자 상세 프로필 수정"""
+    try:
+        # 데이터 검증
+        if profile_data.gender and profile_data.gender not in ["남자", "여자"]:
+            raise HTTPException(status_code=400, detail="성별은 '남자' 또는 '여자'여야 합니다")
+        
+        if profile_data.activity_level and profile_data.activity_level not in ["가벼운활동", "보통활동", "힘든활동"]:
+            raise HTTPException(status_code=400, detail="활동수준은 '가벼운활동', '보통활동', '힘든활동' 중 하나여야 합니다")
+        
+        # 탄단지 비율 검증 (총합 100%인지 확인)
+        if any([profile_data.carb_ratio, profile_data.protein_ratio, profile_data.fat_ratio]):
+            total_ratio = (profile_data.carb_ratio or 0) + (profile_data.protein_ratio or 0) + (profile_data.fat_ratio or 0)
+            if abs(total_ratio - 100.0) > 0.1:  # 0.1% 오차 허용
+                raise HTTPException(status_code=400, detail="탄단지 비율의 총합은 100%여야 합니다")
+        
+        # Firebase에서 사용자 정보 업데이트
+        db = get_firestore_db()
+        user_ref = db.collection('users').document(kakao_id)
+        
+        # 기존 데이터 조회
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        # 업데이트할 데이터 준비
+        update_data = {}
+        if profile_data.nickname is not None:
+            update_data['nickname'] = profile_data.nickname
+        if profile_data.gender is not None:
+            update_data['gender'] = profile_data.gender
+        if profile_data.height is not None:
+            update_data['height'] = profile_data.height
+        if profile_data.weight is not None:
+            update_data['weight'] = profile_data.weight
+        if profile_data.activity_level is not None:
+            update_data['activity_level'] = profile_data.activity_level
+        if profile_data.carb_ratio is not None:
+            update_data['carb_ratio'] = profile_data.carb_ratio
+        if profile_data.protein_ratio is not None:
+            update_data['protein_ratio'] = profile_data.protein_ratio
+        if profile_data.fat_ratio is not None:
+            update_data['fat_ratio'] = profile_data.fat_ratio
+        
+        update_data['updated_at'] = firestore.SERVER_TIMESTAMP
+        
+        # 데이터 업데이트
+        user_ref.update(update_data)
+        
+        # 업데이트된 데이터 조회
+        updated_doc = user_ref.get()
+        updated_data = updated_doc.to_dict()
+        
+        return UserProfile(
+            user_id=kakao_id,
+            email=updated_data.get('email'),
+            nickname=updated_data.get('nickname'),
+            profile_image=updated_data.get('profile_image'),
+            gender=updated_data.get('gender'),
+            height=updated_data.get('height'),
+            weight=updated_data.get('weight'),
+            activity_level=updated_data.get('activity_level'),
+            carb_ratio=updated_data.get('carb_ratio'),
+            protein_ratio=updated_data.get('protein_ratio'),
+            fat_ratio=updated_data.get('fat_ratio'),
+            created_at=updated_data.get('created_at', '').isoformat() if hasattr(updated_data.get('created_at'), 'isoformat') else str(updated_data.get('created_at', '')),
+            updated_at=updated_data.get('updated_at', '').isoformat() if hasattr(updated_data.get('updated_at'), 'isoformat') else str(updated_data.get('updated_at', ''))
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"사용자 프로필 수정 실패: {str(e)}") 
