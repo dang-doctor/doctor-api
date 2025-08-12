@@ -24,3 +24,26 @@ app.include_router(stats.router, prefix="/stats", tags=["통계"])
 async def root():
     return {"message": "Firebase 기반 Doctor API에 오신 것을 환영합니다!"}
 
+@app.get("/health")
+async def health_check():
+    """Firebase 연결 상태 확인"""
+    try:
+        from app.firebase_config import get_firestore_db
+        db = get_firestore_db()
+        # 간단한 쿼리로 연결 테스트
+        test_query = db.collection("_health_check").limit(1).stream()
+        list(test_query)  # 쿼리 실행
+        return {
+            "status": "healthy",
+            "firebase": "connected",
+            "project_id": "dang-doctor",
+            "message": "Firebase 연결 성공"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "firebase": "disconnected",
+            "error": str(e),
+            "message": "Firebase 연결 실패 - 서비스 계정 키 파일을 확인해주세요"
+        }
+
