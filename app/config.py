@@ -14,11 +14,22 @@ class Settings:
     KAKAO_CLIENT_ID: str = os.getenv("KAKAO_CLIENT_ID", "")
     KAKAO_CLIENT_SECRET: str = os.getenv("KAKAO_CLIENT_SECRET", "")
     
+    # 디버깅: 환경변수 로딩 확인
+    def __init__(self):
+        print(f"🔍 환경변수 로딩 확인:")
+        print(f"   KAKAO_CLIENT_ID: {self.KAKAO_CLIENT_ID[:10] if self.KAKAO_CLIENT_ID else 'None'}...")
+        print(f"   KAKAO_CLIENT_SECRET: {self.KAKAO_CLIENT_SECRET[:10] if self.KAKAO_CLIENT_SECRET else 'None'}...")
+        print(f"   KAKAO_REDIRECT_URI: {self.KAKAO_REDIRECT_URI}")
+        print(f"   DEV_MODE: {self.DEV_MODE}")
+    
+    # 카카오 리다이렉트 URI (환경변수로 설정 가능)
+    KAKAO_REDIRECT_URI: str = os.getenv("KAKAO_REDIRECT_URI", "https://147b01ffff45.ngrok-free.app/auth/kakao/callback")
+    
     # Firebase 설정
     FIREBASE_SERVICE_ACCOUNT_KEY: Optional[str] = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
     
     # 개발 모드 (Firebase 없이 테스트 가능)
-    DEV_MODE: bool = os.getenv("DEV_MODE", "True").lower() == "true"
+    DEV_MODE: bool = os.getenv("DEV_MODE", "False").lower() == "true"
     
     # 앱 설정
     APP_NAME: str = os.getenv("APP_NAME", "Doctor API (Firebase)")
