@@ -86,12 +86,26 @@ async def kakao_login_with_firebase(access_token: str) -> dict:
         # 새 사용자 생성
         user_ref.set(user_data)
     
-    return {
-        "user_id": kakao_id,
-        "email": user_data.get("email"),
-        "nickname": user_data.get("nickname"),
-        "profile_image": user_data.get("profile_image")
-    }
+    # 4. Firebase 커스텀 토큰 자동 생성
+    try:
+        from firebase_admin import auth
+        custom_token = auth.create_custom_token(kakao_id)
+        
+        return {
+            "user_id": kakao_id,
+            "email": user_data.get("email"),
+            "nickname": user_data.get("nickname"),
+            "profile_image": user_data.get("profile_image"),
+            "firebase_token": custom_token.decode()  # 자동으로 토큰 포함
+        }
+    except Exception as token_error:
+        print(f"Firebase 토큰 생성 실패: {str(token_error)}")
+        return {
+            "user_id": kakao_id,
+            "email": user_data.get("email"),
+            "nickname": user_data.get("nickname"),
+            "profile_image": user_data.get("profile_image")
+        }
 
 async def verify_user_token(id_token: str) -> dict:
     """Firebase ID 토큰으로 사용자 검증"""
