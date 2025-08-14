@@ -158,6 +158,50 @@ async def get_all_users():
             "message": "사용자 목록 조회 실패"
         }, status_code=500)
 
+@router.post("/firebase/token")
+async def create_firebase_token(kakao_id: str):
+    """kakao_id로 Firebase 커스텀 토큰 생성"""
+    try:
+        from firebase_admin import auth
+        
+        # Firebase 커스텀 토큰 생성
+        custom_token = auth.create_custom_token(kakao_id)
+        
+        return {
+            "success": True,
+            "firebase_token": custom_token.decode(),
+            "kakao_id": kakao_id,
+            "message": "Firebase 토큰 생성 성공"
+        }
+    except Exception as e:
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e),
+            "message": "Firebase 토큰 생성 실패"
+        }, status_code=500)
+
+@router.get("/firebase/refresh-token/{kakao_id}")
+async def refresh_firebase_token(kakao_id: str):
+    """kakao_id로 Firebase 토큰 새로고침 (GET 요청으로 간단하게)"""
+    try:
+        from firebase_admin import auth
+        
+        # Firebase 커스텀 토큰 생성
+        custom_token = auth.create_custom_token(kakao_id)
+        
+        return {
+            "success": True,
+            "firebase_token": custom_token.decode(),
+            "kakao_id": kakao_id,
+            "message": "Firebase 토큰 새로고침 성공"
+        }
+    except Exception as e:
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e),
+            "message": "Firebase 토큰 새로고침 실패"
+        }, status_code=500)
+
 @router.put("/users/{kakao_id}/profile")
 async def update_user_profile(kakao_id: str, profile_data: dict):
     """사용자 프로필 업데이트"""
