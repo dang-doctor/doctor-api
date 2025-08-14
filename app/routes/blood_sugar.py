@@ -98,8 +98,64 @@ async def create_blood_sugar(data: BloodSugarData, user_id: str = Depends(get_cu
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"날짜/시간 형식 오류: {str(e)}")
+
+@router.get("/", response_model=List[BloodSugarResponse])
+async def get_blood_sugar_list(user_id: str = Depends(get_current_user_id)):
+    """사용자의 혈당 데이터 목록 조회"""
+    try:
+        # 개발자 모드에서는 더미 데이터 반환
+        if settings.DEV_MODE:
+            return [
+                BloodSugarResponse(
+                    id="dev_1",
+                    blood_sugar=120,
+                    meal_type="아침",
+                    date="2024-01-15",
+                    time="08:30",
+                    notes="테스트",
+                    created_at="2024-01-15T08:30:00"
+                ),
+                BloodSugarResponse(
+                    id="dev_2",
+                    blood_sugar=95,
+                    meal_type="점심",
+                    date="2024-01-15",
+                    time="12:30",
+                    notes="테스트",
+                    created_at="2024-01-15T12:30:00"
+                )
+            ]
+        
+        # Firebase에서 사용자의 혈당 데이터 조회
+        db = get_firestore_db()
+        blood_sugar_docs = db.collection('blood_sugar').where('user_id', '==', user_id).stream()
+        
+        blood_sugar_list = []
+        for doc in blood_sugar_docs:
+            data = doc.to_dict()
+            blood_sugar_list.append(BloodSugarResponse(
+                id=doc.id,
+                blood_sugar=data['blood_sugar'],
+                meal_type=data['meal_type'],
+                date=data['date'],
+                time=data['time'],
+                notes=data.get('notes'),
+                created_at=data['created_at'].isoformat() if hasattr(data['created_at'], 'isoformat') else str(data['created_at'])
+            ))
+        
+        return blood_sugar_list
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"혈당 데이터 등록 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"혈당 데이터 조회 실패: {str(e)}")
+
+@router.get("/health")
+async def blood_sugar_health():
+    """혈당 서비스 상태 확인"""
+    return {
+        "status": "healthy",
+        "service": "blood-sugar",
+        "message": "혈당 서비스가 정상적으로 작동 중입니다"
+    }
 
 @router.get("/", response_model=List[BloodSugarResponse])
 async def get_blood_sugar_list(
