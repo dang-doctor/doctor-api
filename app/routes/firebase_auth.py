@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from app.services.firebase_auth_service import kakao_login_with_firebase, verify_user_token, exchange_kakao_code_for_token
+from app.firebase_config import initialize_firebase
 
 router = APIRouter()
 
@@ -163,6 +164,8 @@ async def create_firebase_token(kakao_id: str):
     """kakao_id로 Firebase 커스텀 토큰 생성"""
     try:
         from firebase_admin import auth
+        # Ensure Firebase app is initialized
+        initialize_firebase()
         
         # Firebase 커스텀 토큰 생성
         custom_token = auth.create_custom_token(kakao_id)
@@ -185,6 +188,8 @@ async def refresh_firebase_token(kakao_id: str):
     """kakao_id로 Firebase 토큰 새로고침 (GET 요청으로 간단하게)"""
     try:
         from firebase_admin import auth
+        # Ensure Firebase app is initialized
+        initialize_firebase()
         
         # Firebase 커스텀 토큰 생성
         custom_token = auth.create_custom_token(kakao_id)
