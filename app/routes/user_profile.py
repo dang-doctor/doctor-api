@@ -45,6 +45,21 @@ class UserDashboard(BaseModel):
     blood_sugar_summary: BloodSugarSummary
     total_days: int
 
+class NutritionCalculation(BaseModel):
+    daily_calories: float  # 하루 섭취열량 (kcal)
+    carbohydrates: float   # 탄수화물 (g)
+    protein: float        # 단백질 (g)
+    fat: float           # 지방 (g)
+    calculation_details: dict  # 계산 과정 상세 정보
+
+class NutritionCalculationRequest(BaseModel):
+    height: float        # 키 (cm)
+    gender: str         # 성별 ("남자" 또는 "여자")
+    activity_level: str # 활동수준 ("가벼운활동", "보통활동", "힘든활동")
+    carb_ratio: float   # 탄수화물 비율 (%)
+    protein_ratio: float # 단백질 비율 (%)
+    fat_ratio: float    # 지방 비율 (%)
+
 async def get_current_user_id(authorization: str = Header(None)):
     """현재 로그인한 사용자 ID 가져오기"""
     # 개발자 모드에서는 토큰 없이도 허용
@@ -225,6 +240,140 @@ async def update_user_profile(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"사용자 프로필 수정 실패: {str(e)}")
+
+def calculate_nutrition_requirements(
+    height_cm: float,
+    gender: str,
+    activity_level: str,
+    carb_ratio: float,
+    protein_ratio: float,
+    fat_ratio: float
+) -> NutritionCalculation:
+    """영양 요구량 계산"""
+    
+    # 키를 m로 변환
+    height_m = height_cm / 100
+    
+    # 성별에 따른 표준체중 계수
+    gender_coefficient = 22 if gender == "남자" else 21
+    
+    # 표준체중 계산
+    standard_weight = height_m ** 2 * gender_coefficient
+    
+    # 활동별 열량 계수 (중간값 사용)
+    activity_coefficients = {
+        "가벼운활동": 27.5,  # 25~30의 중간값
+        "보통활동": 32.5,   # 30~35의 중간값
+        "힘든활동": 37.5    # 35~40의 중간값
+    }
+    
+    activity_coefficient = activity_coefficients.get(activity_level, 32.5)
+    
+    # 하루 섭취열량 계산
+    daily_calories = standard_weight * activity_coefficient
+    
+    # 탄단지 계산 (g 단위)
+    carbohydrates = (daily_calories * carb_ratio / 100) / 4
+    protein = (daily_calories * protein_ratio / 100) / 4
+    fat = (daily_calories * fat_ratio / 100) / 9  # 지방은 1g당 9kcal
+    
+    # 계산 과정 상세 정보
+    calculation_details = {
+        "height_cm": height_cm,
+        "height_m": round(height_m, 2),
+        "gender": gender,
+        "gender_coefficient": gender_coefficient,
+        "standard_weight_kg": round(standard_weight, 1),
+        "activity_level": activity_level,
+        "activity_coefficient": activity_coefficient,
+        "daily_calories_formula": f"{round(standard_weight, 1)} × {activity_coefficient}",
+        "carb_ratio": carb_ratio,
+        "protein_ratio": protein_ratio,
+        "fat_ratio": fat_ratio
+    }
+    
+    return NutritionCalculation(
+        daily_calories=round(daily_calories, 1),
+        carbohydrates=round(carbohydrates, 1),
+        protein=round(protein, 1),
+        fat=round(fat, 1),
+        calculation_details=calculation_details
+    )
+
+@router.post("/nutrition/calculate", response_model=NutritionCalculation)
+async def calculate_nutrition(
+    request: NutritionCalculationRequest
+):
+    """영양 요구량 계산"""
+    try:
+        # 데이터 검증
+        if request.gender not in ["남자", "여자"]:
+            raise HTTPException(status_code=400, detail="성별은 '남자' 또는 '여자'여야 합니다")
+        
+        if request.activity_level not in ["가벼운활동", "보통활동", "힘든활동"]:
+            raise HTTPException(status_code=400, detail="활동수준은 '가벼운활동', '보통활동', '힘든활동' 중 하나여야 합니다")
+        
+        # 탄단지 비율 검증 (총합 100%인지 확인)
+        total_ratio = request.carb_ratio + request.protein_ratio + request.fat_ratio
+        if abs(total_ratio - 100.0) > 0.1:  # 0.1% 오차 허용
+            raise HTTPException(status_code=400, detail="탄단지 비율의 총합은 100%여야 합니다")
+        
+        # 영양 계산
+        nutrition = calculate_nutrition_requirements(
+            height_cm=request.height,
+            gender=request.gender,
+            activity_level=request.activity_level,
+            carb_ratio=request.carb_ratio,
+            protein_ratio=request.protein_ratio,
+            fat_ratio=request.fat_ratio
+        )
+        
+        return nutrition
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"영양 계산 실패: {str(e)}")
+
+@router.post("/nutrition/calculate-from-profile", response_model=NutritionCalculation)
+async def calculate_nutrition_from_profile(user_id: str = Depends(get_current_user_id)):
+    """사용자 프로필 정보로 영양 요구량 계산"""
+    try:
+        # 사용자 프로필 정보 조회
+        db = get_firestore_db()
+        user_doc = db.collection('users').document(user_id).get()
+        
+        if not user_doc.exists:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        user_data = user_doc.to_dict()
+        
+        # 필수 정보 확인
+        required_fields = ['height', 'gender', 'activity_level', 'carb_ratio', 'protein_ratio', 'fat_ratio']
+        missing_fields = [field for field in required_fields if not user_data.get(field)]
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"프로필에 다음 정보가 필요합니다: {', '.join(missing_fields)}"
+            )
+        
+        # 영양 계산
+        nutrition = calculate_nutrition_requirements(
+            height_cm=user_data['height'],
+            gender=user_data['gender'],
+            activity_level=user_data['activity_level'],
+            carb_ratio=user_data['carb_ratio'],
+            protein_ratio=user_data['protein_ratio'],
+            fat_ratio=user_data['fat_ratio']
+        )
+        
+        return nutrition
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"영양 계산 실패: {str(e)}")
 
 @router.get("/dashboard", response_model=UserDashboard)
 async def get_user_dashboard(user_id: str = Depends(get_current_user_id)):
