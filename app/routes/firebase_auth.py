@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from app.services.firebase_auth_service import kakao_login_with_firebase, verify_user_token, exchange_kakao_code_for_token
 from app.firebase_config import initialize_firebase
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -205,6 +206,54 @@ async def refresh_firebase_token(kakao_id: str):
             "success": False,
             "error": str(e),
             "message": "Firebase 토큰 새로고침 실패"
+        }, status_code=500)
+
+class IdTokenRequest(BaseModel):
+    kakao_id: str
+
+# 신규: kakao_id로 바로 ID 토큰 발급 (JSON Body)
+@router.post("/firebase/id-token")
+async def create_id_token(payload: IdTokenRequest):
+    """kakao_id로 커스텀 토큰 생성 후 ID 토큰으로 교환하여 반환"""
+    try:
+        from firebase_admin import auth
+        import httpx
+        from app.config import settings
+        
+        if not settings.FIREBASE_WEB_API_KEY:
+            raise HTTPException(status_code=500, detail="FIREBASE_WEB_API_KEY 미설정")
+        
+        initialize_firebase()
+        custom_token = auth.create_custom_token(payload.kakao_id).decode()
+        
+        exchange_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key={settings.FIREBASE_WEB_API_KEY}"
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(exchange_url, json={
+                "token": custom_token,
+                "returnSecureToken": True
+            })
+            if resp.status_code != 200:
+                return JSONResponse(content={
+                    "success": False,
+                    "error": resp.text,
+                    "message": "ID 토큰 교환 실패"
+                }, status_code=resp.status_code)
+            data = resp.json()
+        
+        return {
+            "success": True,
+            "kakao_id": payload.kakao_id,
+            "id_token": data.get("idToken"),
+            "refresh_token": data.get("refreshToken"),
+            "expires_in": data.get("expiresIn")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e),
+            "message": "ID 토큰 생성 실패"
         }, status_code=500)
 
 @router.put("/users/{kakao_id}/profile")

@@ -47,7 +47,8 @@ async def get_current_user_id(authorization: str = Header(None)) -> str:
         from app.services.firebase_auth_service import verify_user_token
         token = authorization.split(" ")[1]
         decoded_token = await verify_user_token(token)
-        return decoded_token.get("uid")
+        # kakao_id를 user_id로 사용
+        return decoded_token.get("kakao_id") or decoded_token.get("uid")
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"토큰 검증 실패: {str(e)}")
 
