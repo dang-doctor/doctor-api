@@ -20,6 +20,7 @@ class Settings:
         print(f"   KAKAO_CLIENT_ID: {self.KAKAO_CLIENT_ID[:10] if self.KAKAO_CLIENT_ID else 'None'}...")
         print(f"   KAKAO_CLIENT_SECRET: {self.KAKAO_CLIENT_SECRET[:10] if self.KAKAO_CLIENT_SECRET else 'None'}...")
         print(f"   KAKAO_REDIRECT_URI: {self.KAKAO_REDIRECT_URI}")
+        print(f"   FIREBASE_WEB_API_KEY: {'set' if self.FIREBASE_WEB_API_KEY else 'None'}")
         print(f"   DEV_MODE: {self.DEV_MODE}")
     
     # 카카오 리다이렉트 URI (환경변수로 설정 가능)
@@ -27,6 +28,7 @@ class Settings:
     
     # Firebase 설정
     FIREBASE_SERVICE_ACCOUNT_KEY: Optional[str] = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
+    FIREBASE_WEB_API_KEY: Optional[str] = os.getenv("FIREBASE_WEB_API_KEY")
     
     # 개발 모드 (Firebase 없이 테스트 가능)
     DEV_MODE: bool = os.getenv("DEV_MODE", "False").lower() == "true"
