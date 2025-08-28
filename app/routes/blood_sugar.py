@@ -14,7 +14,6 @@ class BloodSugarData(BaseModel):
     meal_type: str  # 기상직후, 아침, 점심, 저녁
     date: str  # YYYY-MM-DD 형식
     time: str  # HH:MM 형식
-    notes: Optional[str] = None  # 메모
 
 class BloodSugarResponse(BaseModel):
     id: str
@@ -22,25 +21,33 @@ class BloodSugarResponse(BaseModel):
     meal_type: str
     date: str
     time: str
-    notes: Optional[str] = None
     created_at: str
 
 async def get_current_user_id(authorization: str = Header(None)):
     """현재 로그인한 사용자 ID 가져오기"""
+    print(f"DEBUG: Authorization 헤더: {authorization}")
+    
     # 개발자 모드에서는 토큰 없이도 허용
     if settings.DEV_MODE:
         return "dev_user_123"
     
     if not authorization or not authorization.startswith("Bearer "):
+        print(f"DEBUG: 토큰 형식 오류: {authorization}")
         raise HTTPException(status_code=401, detail="토큰이 필요합니다")
     
     try:
         # 실제 Firebase 토큰 검증
         from app.services.firebase_auth_service import verify_user_token
         token = authorization.split(" ")[1]
+        print(f"DEBUG: 토큰 검증 시도: {token[:20]}...")
         decoded_token = await verify_user_token(token)
-        return decoded_token.get("uid")
+        print(f"DEBUG: 토큰 검증 성공: {decoded_token}")
+        # kakao_id를 우선 user_id로 사용, 없으면 uid 사용
+        user_id = decoded_token.get("kakao_id") or decoded_token.get("uid")
+        print(f"DEBUG: 사용자 ID: {user_id}")
+        return user_id
     except Exception as e:
+        print(f"DEBUG: 토큰 검증 실패: {str(e)}")
         raise HTTPException(status_code=401, detail=f"토큰 검증 실패: {str(e)}")
 
 @router.post("/", response_model=BloodSugarResponse)
@@ -68,7 +75,6 @@ async def create_blood_sugar(data: BloodSugarData, user_id: str = Depends(get_cu
                 meal_type=data.meal_type,
                 date=data.date,
                 time=data.time,
-                notes=data.notes,
                 created_at=datetime.now().isoformat()
             )
         
@@ -80,7 +86,6 @@ async def create_blood_sugar(data: BloodSugarData, user_id: str = Depends(get_cu
             "meal_type": data.meal_type,
             "date": data.date,
             "time": data.time,
-            "notes": data.notes,
             "created_at": firestore.SERVER_TIMESTAMP
         }
         
@@ -92,7 +97,6 @@ async def create_blood_sugar(data: BloodSugarData, user_id: str = Depends(get_cu
             meal_type=data.meal_type,
             date=data.date,
             time=data.time,
-            notes=data.notes,
             created_at=datetime.now().isoformat()
         )
         
@@ -112,7 +116,6 @@ async def get_blood_sugar_list(user_id: str = Depends(get_current_user_id)):
                     meal_type="아침",
                     date="2024-01-15",
                     time="08:30",
-                    notes="테스트",
                     created_at="2024-01-15T08:30:00"
                 ),
                 BloodSugarResponse(
@@ -121,7 +124,6 @@ async def get_blood_sugar_list(user_id: str = Depends(get_current_user_id)):
                     meal_type="점심",
                     date="2024-01-15",
                     time="12:30",
-                    notes="테스트",
                     created_at="2024-01-15T12:30:00"
                 )
             ]
@@ -139,7 +141,6 @@ async def get_blood_sugar_list(user_id: str = Depends(get_current_user_id)):
                 meal_type=data['meal_type'],
                 date=data['date'],
                 time=data['time'],
-                notes=data.get('notes'),
                 created_at=data['created_at'].isoformat() if hasattr(data['created_at'], 'isoformat') else str(data['created_at'])
             ))
         
@@ -174,7 +175,6 @@ async def get_blood_sugar_list(
                     meal_type="아침",
                     date="2024-01-15",
                     time="08:30",
-                    notes="아침 식사 후",
                     created_at="2024-01-15T08:30:00"
                 ),
                 BloodSugarResponse(
@@ -183,7 +183,6 @@ async def get_blood_sugar_list(
                     meal_type="점심",
                     date="2024-01-15",
                     time="12:30",
-                    notes="점심 식사 후",
                     created_at="2024-01-15T12:30:00"
                 )
             ]
@@ -210,7 +209,6 @@ async def get_blood_sugar_list(
                 meal_type=data['meal_type'],
                 date=data['date'],
                 time=data['time'],
-                notes=data.get('notes'),
                 created_at=data.get('created_at', '').isoformat() if hasattr(data.get('created_at'), 'isoformat') else str(data.get('created_at', ''))
             ))
         
@@ -231,7 +229,6 @@ async def get_blood_sugar_detail(blood_sugar_id: str, user_id: str = Depends(get
                 meal_type="아침",
                 date="2024-01-15",
                 time="08:30",
-                notes="아침 식사 후",
                 created_at="2024-01-15T08:30:00"
             )
         
@@ -252,7 +249,6 @@ async def get_blood_sugar_detail(blood_sugar_id: str, user_id: str = Depends(get
             meal_type=data['meal_type'],
             date=data['date'],
             time=data['time'],
-            notes=data.get('notes'),
             created_at=data.get('created_at', '').isoformat() if hasattr(data.get('created_at'), 'isoformat') else str(data.get('created_at', ''))
         )
         
@@ -290,7 +286,6 @@ async def update_blood_sugar(
                 meal_type=data.meal_type,
                 date=data.date,
                 time=data.time,
-                notes=data.notes,
                 created_at=datetime.now().isoformat()
             )
         
@@ -311,7 +306,6 @@ async def update_blood_sugar(
             "meal_type": data.meal_type,
             "date": data.date,
             "time": data.time,
-            "notes": data.notes,
             "updated_at": firestore.SERVER_TIMESTAMP
         }
         
@@ -323,7 +317,6 @@ async def update_blood_sugar(
             meal_type=data.meal_type,
             date=data.date,
             time=data.time,
-            notes=data.notes,
             created_at=datetime.now().isoformat()
         )
         
