@@ -43,16 +43,25 @@ class OverviewStats(BaseModel):
     combined_insights: List[str]
 
 async def get_current_user_id(authorization: str = Header(None)) -> str:
-    if settings.DEV_MODE:
-        return "dev_user_123"
+    """현재 로그인한 사용자 ID 가져오기"""
+    print(f"DEBUG: Authorization 헤더: {authorization}")
+    
     if not authorization or not authorization.startswith("Bearer "):
+        print(f"DEBUG: 토큰 형식 오류: {authorization}")
         raise HTTPException(status_code=401, detail="토큰이 필요합니다")
+    
     try:
+        # 실제 Firebase 토큰 검증
         from app.services.firebase_auth_service import verify_user_token
         token = authorization.split(" ")[1]
+        print(f"DEBUG: 토큰 검증 시도: {token[:50]}...")
         decoded_token = await verify_user_token(token)
-        return decoded_token.get("uid")
+        # kakao_id를 우선 user_id로 사용, 없으면 uid 사용
+        user_id = decoded_token.get("kakao_id") or decoded_token.get("uid")
+        print(f"DEBUG: 사용자 ID: {user_id}")
+        return user_id
     except Exception as e:
+        print(f"DEBUG: 토큰 검증 실패: {str(e)}")
         raise HTTPException(status_code=401, detail=f"토큰 검증 실패: {str(e)}")
 
 def get_date_range(period: str, start_date: Optional[str] = None) -> tuple:

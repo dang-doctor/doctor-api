@@ -149,6 +149,60 @@ async def get_blood_sugar_list(user_id: str = Depends(get_current_user_id)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"혈당 데이터 조회 실패: {str(e)}")
 
+@router.get("/daily/{date}", response_model=List[BloodSugarResponse])
+async def get_blood_sugar_by_date(date: str, user_id: str = Depends(get_current_user_id)):
+    """특정 날짜의 혈당 데이터 조회"""
+    try:
+        # 날짜 형식 검증
+        datetime.strptime(date, "%Y-%m-%d")
+        
+        # 개발자 모드에서는 더미 데이터 반환
+        if settings.DEV_MODE:
+            return [
+                BloodSugarResponse(
+                    id="dev_1",
+                    blood_sugar=120,
+                    meal_type="아침",
+                    date=date,
+                    time="08:30",
+                    created_at=f"{date}T08:30:00"
+                ),
+                BloodSugarResponse(
+                    id="dev_2",
+                    blood_sugar=95,
+                    meal_type="점심",
+                    date=date,
+                    time="12:30",
+                    created_at=f"{date}T12:30:00"
+                )
+            ]
+        
+        # Firebase에서 특정 날짜의 혈당 데이터 조회
+        db = get_firestore_db()
+        blood_sugar_docs = db.collection('blood_sugar').where('user_id', '==', user_id).where('date', '==', date).stream()
+        
+        blood_sugar_list = []
+        for doc in blood_sugar_docs:
+            data = doc.to_dict()
+            blood_sugar_list.append(BloodSugarResponse(
+                id=doc.id,
+                blood_sugar=data['blood_sugar'],
+                meal_type=data['meal_type'],
+                date=data['date'],
+                time=data['time'],
+                created_at=data['created_at'].isoformat() if hasattr(data['created_at'], 'isoformat') else str(data['created_at'])
+            ))
+        
+        # 시간순으로 정렬
+        blood_sugar_list.sort(key=lambda x: x.time)
+        
+        return blood_sugar_list
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식을 사용해주세요.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"혈당 데이터 조회 실패: {str(e)}")
+
 @router.get("/health")
 async def blood_sugar_health():
     """혈당 서비스 상태 확인"""
