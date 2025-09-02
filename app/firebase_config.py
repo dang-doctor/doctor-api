@@ -26,10 +26,11 @@ def get_firestore_db():
     return firestore.client()
 
 def verify_firebase_token(id_token: str):
-    """Firebase ID 토큰 검증"""
+    """Firebase ID 토큰 검증 (시계 오차 허용)"""
     try:
         initialize_firebase()
-        decoded_token = auth.verify_id_token(id_token)
+        # 시계 오차를 10초까지 허용
+        decoded_token = auth.verify_id_token(id_token, check_revoked=False, clock_skew_seconds=10)
         return decoded_token
     except Exception as e:
         raise ValueError(f"토큰 검증 실패: {str(e)}") 
