@@ -24,7 +24,7 @@ class Settings:
         print(f"   DEV_MODE: {self.DEV_MODE}")
     
     # 카카오 리다이렉트 URI (환경변수로 설정 가능)
-    KAKAO_REDIRECT_URI: str = os.getenv("KAKAO_REDIRECT_URI", "https://9964c0f7c96c.ngrok-free.app/auth/kakao/callback")
+    KAKAO_REDIRECT_URI: str = os.getenv("KAKAO_REDIRECT_URI", "https://aec0dea9bcc1.ngrok-free.app/auth/kakao/callback")
     
     # Firebase 설정
     FIREBASE_SERVICE_ACCOUNT_KEY: Optional[str] = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")

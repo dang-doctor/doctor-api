@@ -107,10 +107,10 @@ async def kakao_login_with_firebase(access_token: str) -> dict:
             "profile_image": user_data.get("profile_image")
         }
 
-async def verify_user_token(id_token: str) -> dict:
+async def verify_user_token(token: str) -> dict:
     """Firebase ID 토큰으로 사용자 검증"""
     try:
-        decoded_token = verify_firebase_token(id_token)
+        decoded_token = verify_firebase_token(token)
         user_id = decoded_token.get("uid")
         
         # Firestore에서 사용자 정보 가져오기
@@ -118,7 +118,10 @@ async def verify_user_token(id_token: str) -> dict:
         user_doc = db.collection('users').document(user_id).get()
         
         if user_doc.exists:
-            return user_doc.to_dict()
+            user_data = user_doc.to_dict()
+            # kakao_id 추가
+            user_data["kakao_id"] = user_id
+            return user_data
         else:
             raise ValueError("사용자를 찾을 수 없습니다")
             
